@@ -54,7 +54,7 @@ resource "null_resource" "name" {
     connection {
       host        = "3.91.197.139"
       user        = "ubuntu"
-      private_key = file("${path.module}/.env/private_key.pem")
+      private_key = file("${path.module}/private_key.pem")
       type        = "ssh"
     }
     inline = [
