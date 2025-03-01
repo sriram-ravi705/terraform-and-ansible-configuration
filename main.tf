@@ -32,6 +32,14 @@ resource "aws_vpc_security_group_ingress_rule" "https" {
   cidr_ipv4 = "0.0.0.0/0"
 }
 
+resource "aws_vpc_security_group_ingress_rule" "app" {
+  security_group_id = aws_security_group.sg.id
+  from_port = 3000
+  to_port = 3000
+  ip_protocol = "tcp"
+  cidr_ipv4 = "0.0.0.0/0"
+}
+
 resource "aws_vpc_security_group_egress_rule" "all_traffic" {
     security_group_id = aws_security_group.sg.id
     ip_protocol = -1
@@ -47,18 +55,38 @@ resource "aws_instance" "aws" {
   tags = {
     Name = "Terraform_Instance"
   }
+
+  provisioner "file" {
+    source = "${path.module}/private_key.pem"
+    destination = "/home/ubuntu/ansible_key.pem"
+  }
+  connection {
+      host        = aws_instance.aws.public_ip
+      user        = "ubuntu"
+      private_key = file("${path.module}/private_key.pem")
+      type        = "ssh"
+  }
 }
 
 resource "null_resource" "name" {
   provisioner "remote-exec" {
     connection {
-      host        = "3.91.197.139"
+      host        = aws_instance.aws.public_ip
       user        = "ubuntu"
       private_key = file("${path.module}/private_key.pem")
-      type        = "ssh"
     }
+    
     inline = [
-        "sudo echo '${aws_instance.aws.private_ip} ansible_user=ubuntu ansible_ssh_private_key_file=ansible_key.pem' >> /home/ubuntu/new_hosts",
+        "sudo apt update",
+        "sudo apt install software-properties-common",
+        "sudo add-apt-repository --yes --update ppa:ansible/ansible",
+        "sudo apt install ansible -y",
+        # "sudo cp ${path.module}/private_key.pem  /home/ubuntu/ansible_key.pem",
+        "sudo chmod 400 /home/ubuntu/ansible_key.pem",
+        "sudo echo '[defaults]' > /home/ubuntu/ansible.cfg",
+        "sudo echo 'host_key_checking = False' >> /home/ubuntu/ansible.cfg",
+        "touch /home/ubuntu/new_hosts",
+        "sudo echo '${aws_instance.aws.private_ip} ansible_user=ubuntu ansible_ssh_private_key_file=/home/ubuntu/ansible_key.pem' >> /home/ubuntu/new_hosts",
         "echo '${file("${path.module}/deploy.yaml")}' > /home/ubuntu/deploy.yaml",
         "ansible-playbook -i new_hosts deploy.yaml"
     ]
